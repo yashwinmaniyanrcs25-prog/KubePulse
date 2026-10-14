@@ -12,6 +12,10 @@ import {
   SelfHealingObservation,
   EndpointTestResponse,
   DemoStage,
+  DeployInputRequest,
+  DeployInputResponse,
+  WebsiteMonitorItem,
+  WorkloadDeleteResponse,
 } from '../types';
 
 const API_BASE = '/api';
@@ -39,7 +43,15 @@ async function fetchJson<T>(url: string, options?: RequestInit): Promise<T> {
 }
 
 export const api = {
-  // Cluster
+  // Cluster & Gateway Health
+  getHealth: () =>
+    fetchJson<{
+      status: string;
+      service: string;
+      k8s_connected: boolean;
+      cluster_status: string;
+      cluster_name: string;
+    }>('/health'),
   getClusterStatus: () => fetchJson<ClusterStatus>('/cluster/status'),
   getNamespaces: () => fetchJson<NamespaceItem[]>('/namespaces'),
 
@@ -99,4 +111,21 @@ export const api = {
   runDemoStep: (stageId: number) =>
     fetchJson<DemoStage>(`/demo/run-step/${stageId}`, { method: 'POST' }),
   resetDemoStages: () => fetchJson<{ message: string }>('/demo/reset', { method: 'POST' }),
+
+  // Application Deployment & Website Monitoring
+  deployInput: (payload: DeployInputRequest) =>
+    fetchJson<DeployInputResponse>('/deployments/deploy-input', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+  deleteWorkload: (name: string, namespace?: string) =>
+    fetchJson<WorkloadDeleteResponse>(
+      namespace ? `/deployments/${name}/workload?namespace=${namespace}` : `/deployments/${name}/workload`,
+      { method: 'DELETE' }
+    ),
+  getMonitors: () => fetchJson<WebsiteMonitorItem[]>('/monitors'),
+  checkMonitor: (name: string) =>
+    fetchJson<WebsiteMonitorItem>(`/monitors/${name}/check`, { method: 'POST' }),
+  deleteMonitor: (name: string) =>
+    fetchJson<{ success: boolean; message: string }>(`/monitors/${name}`, { method: 'DELETE' }),
 };

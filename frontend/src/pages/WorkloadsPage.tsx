@@ -5,6 +5,7 @@ import {
   Scale,
   RefreshCw,
   XCircle,
+  Rocket,
 } from 'lucide-react';
 import { DeploymentItem, RolloutStatus } from '../types';
 import { ScaleModal } from '../components/ScaleModal';
@@ -16,6 +17,7 @@ interface WorkloadsPageProps {
   onRefresh: () => void;
   isRefreshing: boolean;
   isConnected: boolean;
+  onNavigate?: (tab: any) => void;
 }
 
 export const WorkloadsPage: React.FC<WorkloadsPageProps> = ({
@@ -25,6 +27,7 @@ export const WorkloadsPage: React.FC<WorkloadsPageProps> = ({
   onRefresh,
   isRefreshing,
   isConnected,
+  onNavigate,
 }) => {
   const [selectedForScale, setSelectedForScale] = useState<DeploymentItem | null>(null);
   const [isScaling, setIsScaling] = useState(false);
@@ -68,14 +71,26 @@ export const WorkloadsPage: React.FC<WorkloadsPageProps> = ({
           </p>
         </div>
 
-        <button
-          onClick={onRefresh}
-          disabled={isRefreshing}
-          className="flex items-center gap-2 px-3 py-2 rounded-lg bg-navy-900 hover:bg-navy-800 border border-navy-700 text-xs font-medium text-slate-300 hover:text-white transition-colors"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-emerald-400' : ''}`} />
-          <span>Refresh Workloads</span>
-        </button>
+        <div className="flex items-center gap-2.5">
+          {onNavigate && (
+            <button
+              onClick={() => onNavigate('deploy')}
+              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-gradient-to-r from-emerald-500 to-cyan-600 hover:from-emerald-400 hover:to-cyan-500 text-xs font-semibold text-navy-950 transition-colors shadow-sm"
+            >
+              <Rocket className="w-3.5 h-3.5" />
+              <span>Deploy New App</span>
+            </button>
+          )}
+
+          <button
+            onClick={onRefresh}
+            disabled={isRefreshing}
+            className="flex items-center gap-2 px-3 py-2 rounded-lg bg-navy-900 hover:bg-navy-800 border border-navy-700 text-xs font-medium text-slate-300 hover:text-white transition-colors"
+          >
+            <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin text-emerald-400' : ''}`} />
+            <span>Refresh Workloads</span>
+          </button>
+        </div>
       </div>
 
       {!isConnected && (

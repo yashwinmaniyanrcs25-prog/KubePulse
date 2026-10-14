@@ -330,14 +330,22 @@ class KubernetesService:
             self.connect()
 
         node_count = 0
+        node_warning = None
         if self.is_connected and self.core_v1:
             try:
                 nodes = self.core_v1.list_node(timeout_seconds=3)
                 node_count = len(nodes.items)
             except Exception as e:
+                node_warning = self._sanitize_error(str(e))
                 logger.warning(f"Unable to read nodes: {e}")
 
-        status_str = "connected" if self.is_connected else "disconnected"
+        if not self.is_connected:
+            status_str = "disconnected"
+        elif node_warning is not None:
+            status_str = "degraded"
+        else:
+            status_str = "connected"
+
         msg = (
             f"Connected to live cluster '{self.cluster_name}' via {self.auth_type} (Context: {self.current_context})."
             if self.is_connected
@@ -880,5 +888,211 @@ class KubernetesService:
             "history": self.metric_history
         }
 
+    # -------------------------------------------------------------
+    # CUSTOM WORKLOAD DEPLOYMENT & LIFECYCLE
+    # -------------------------------------------------------------
+    def create_or_update_app_deployment(
+        self,
+        name: str,
+        image: str,
+        port: int = 80,
+        replicas: int = 1,
+        namespace: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """
+        Creates or updates a hardened Kubernetes Deployment.
+        Applies:
+        - Dedicated namespace validation
+        - Least privilege pod & container securityContext (runAsNonRoot, UID 10001, drop ALL caps)
+        - Resource requests and limits (CPU: 50m-500m, Memory: 64Mi-512Mi)
+        - RollingUpdate strategy
+        - Probes configured on the target port
+        """
+        self._ensure_connected()
+        from app.services.security import validate_dns_name, validate_docker_image, validate_target_namespace
+        clean_name = validate_dns_name(name)
+        clean_image = validate_docker_image(image)
+        ns = validate_target_namespace(namespace)
+
+        if replicas < 1 or replicas > 10:
+            raise ValueError("Replica count must be between 1 and 10.")
+        if port < 1 or port > 65535:
+            raise ValueError("Container port must be between 1 and 65535.")
+
+        labels = {"app": clean_name, "managed-by": "kubepulse"}
+
+        container = client.V1Container(
+            name=clean_name,
+            image=clean_image,
+            ports=[client.V1ContainerPort(container_port=port, name="http")],
+            resources=client.V1ResourceRequirements(
+                limits={"cpu": "500m", "memory": "512Mi"},
+                requests={"cpu": "50m", "memory": "64Mi"}
+            ),
+            security_context=client.V1SecurityContext(
+                allow_privilege_escalation=False,
+                capabilities=client.V1Capabilities(drop=["ALL"])
+            ),
+            readiness_probe=client.V1Probe(
+                tcp_socket=client.V1TCPSocketAction(port=port),
+                initial_delay_seconds=3,
+                period_seconds=5
+            ),
+            liveness_probe=client.V1Probe(
+                tcp_socket=client.V1TCPSocketAction(port=port),
+                initial_delay_seconds=5,
+                period_seconds=10
+            )
+        )
+
+        template = client.V1PodTemplateSpec(
+            metadata=client.V1ObjectMeta(labels=labels),
+            spec=client.V1PodSpec(
+                security_context=client.V1PodSecurityContext(
+                    run_as_non_root=True,
+                    run_as_user=10001,
+                    fs_group=10001
+                ),
+                containers=[container]
+            )
+        )
+
+        spec = client.V1DeploymentSpec(
+            replicas=replicas,
+            selector=client.V1LabelSelector(match_labels={"app": clean_name}),
+            strategy=client.V1DeploymentStrategy(type="RollingUpdate"),
+            template=template
+        )
+
+        dep_body = client.V1Deployment(
+            api_version="apps/v1",
+            kind="Deployment",
+            metadata=client.V1ObjectMeta(name=clean_name, namespace=ns, labels=labels),
+            spec=spec
+        )
+
+        try:
+            exists = False
+            try:
+                self.apps_v1.read_namespaced_deployment(name=clean_name, namespace=ns)
+                exists = True
+            except ApiException as e_get:
+                if e_get.status == 404:
+                    exists = False
+                else:
+                    raise
+
+            if exists:
+                dep_res = self.apps_v1.patch_namespaced_deployment(name=clean_name, namespace=ns, body=dep_body)
+                action = "updated"
+            else:
+                dep_res = self.apps_v1.create_namespaced_deployment(namespace=ns, body=dep_body)
+                action = "created"
+
+            return {
+                "name": dep_res.metadata.name,
+                "namespace": dep_res.metadata.namespace,
+                "image": clean_image,
+                "replicas": dep_res.spec.replicas,
+                "action": action,
+                "status": "deployed"
+            }
+        except ApiException as e:
+            logger.error(f"Kubernetes API error deploying {clean_name}: {e}")
+            raise RuntimeError(f"Kubernetes API error: {e.reason} ({e.status})")
+
+    def create_or_update_app_service(
+        self,
+        name: str,
+        port: int = 80,
+        service_port: int = 80,
+        namespace: Optional[str] = None
+    ) -> Dict[str, Any]:
+        """Creates or updates a ClusterIP Service for an application."""
+        self._ensure_connected()
+        from app.services.security import validate_dns_name, validate_target_namespace
+        clean_name = validate_dns_name(name)
+        ns = validate_target_namespace(namespace)
+        svc_name = f"{clean_name}-service"
+        labels = {"app": clean_name, "managed-by": "kubepulse"}
+
+        svc_body = client.V1Service(
+            api_version="v1",
+            kind="Service",
+            metadata=client.V1ObjectMeta(name=svc_name, namespace=ns, labels=labels),
+            spec=client.V1ServiceSpec(
+                type="ClusterIP",
+                selector={"app": clean_name},
+                ports=[client.V1ServicePort(name="http", port=service_port, target_port=port)]
+            )
+        )
+
+        try:
+            exists = False
+            try:
+                self.core_v1.read_namespaced_service(name=svc_name, namespace=ns)
+                exists = True
+            except ApiException as e_get:
+                if e_get.status == 404:
+                    exists = False
+                else:
+                    raise
+
+            if exists:
+                svc_res = self.core_v1.patch_namespaced_service(name=svc_name, namespace=ns, body=svc_body)
+                action = "updated"
+            else:
+                svc_res = self.core_v1.create_namespaced_service(namespace=ns, body=svc_body)
+                action = "created"
+
+            return {
+                "name": svc_res.metadata.name,
+                "namespace": svc_res.metadata.namespace,
+                "cluster_ip": svc_res.spec.cluster_ip,
+                "port": service_port,
+                "target_port": port,
+                "action": action
+            }
+        except ApiException as e:
+            logger.error(f"Kubernetes API error creating service for {clean_name}: {e}")
+            raise RuntimeError(f"Kubernetes API error: {e.reason} ({e.status})")
+
+    def delete_workload(self, name: str, namespace: Optional[str] = None) -> Dict[str, Any]:
+        """Deletes a deployed workload (Deployment + Service). Guardrails prevent deleting protected target deployment."""
+        self._ensure_connected()
+        from app.services.security import validate_dns_name, validate_target_namespace
+        clean_name = validate_dns_name(name)
+        ns = validate_target_namespace(namespace)
+
+        deleted_dep = False
+        deleted_svc = False
+
+        # Delete Deployment
+        try:
+            self.apps_v1.delete_namespaced_deployment(name=clean_name, namespace=ns)
+            deleted_dep = True
+        except ApiException as e:
+            if e.status != 404:
+                raise RuntimeError(f"Kubernetes API error deleting deployment '{clean_name}': {e.reason}")
+
+        # Delete Service
+        svc_name = f"{clean_name}-service"
+        try:
+            self.core_v1.delete_namespaced_service(name=svc_name, namespace=ns)
+            deleted_svc = True
+        except ApiException as e:
+            if e.status != 404:
+                pass  # Ignore if service was not present
+
+        return {
+            "success": True,
+            "app_name": clean_name,
+            "namespace": ns,
+            "deleted_deployment": deleted_dep,
+            "deleted_service": deleted_svc,
+            "message": f"Successfully deleted workload '{clean_name}' from namespace '{ns}'."
+        }
+
 # Global singleton
 k8s_service = KubernetesService()
+

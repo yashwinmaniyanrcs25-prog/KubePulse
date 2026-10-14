@@ -1,6 +1,6 @@
 export interface ClusterStatus {
   is_connected: boolean;
-  cluster_status: 'connected' | 'disconnected';
+  cluster_status: 'connected' | 'disconnected' | 'connecting' | 'degraded';
   cluster_name: string;
   server_version?: string;
   auth_type: string;
@@ -197,9 +197,67 @@ export interface DemoStage {
   status: 'pending' | 'running' | 'passed' | 'failed';
 }
 
+export type DeploySourceType = 'git' | 'image' | 'website';
+
+export interface DeployInputRequest {
+  source_type: DeploySourceType;
+  app_name: string;
+  git_url?: string;
+  branch?: string;
+  image_ref?: string;
+  website_url?: string;
+  container_port?: number;
+  replicas?: number;
+  namespace?: string;
+}
+
+export interface DeployInputResponse {
+  success: boolean;
+  app_name: string;
+  source_type: DeploySourceType;
+  is_deployed_to_k8s: boolean;
+  deployment_name?: string;
+  service_name?: string;
+  service_port?: number;
+  image?: string;
+  replicas?: number;
+  status: string;
+  message: string;
+  details?: any;
+}
+
+export interface WebsiteMonitorItem {
+  name: string;
+  url: string;
+  is_available: boolean;
+  status_code?: number;
+  latency_ms?: number;
+  error?: string;
+  last_checked: string;
+  is_deployed_to_k8s: boolean;
+  notice: string;
+  history: Array<{
+    timestamp: string;
+    status_code?: number;
+    latency_ms?: number;
+    is_up: boolean;
+    error?: string;
+  }>;
+}
+
+export interface WorkloadDeleteResponse {
+  success: boolean;
+  app_name: string;
+  namespace: string;
+  deleted_deployment: boolean;
+  deleted_service: boolean;
+  message: string;
+}
+
 export type NavTab = 
   | 'overview'
   | 'workloads'
+  | 'deploy'
   | 'pods'
   | 'services'
   | 'health'
@@ -207,3 +265,4 @@ export type NavTab =
   | 'demo'
   | 'guide'
   | 'settings';
+

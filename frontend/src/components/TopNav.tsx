@@ -69,20 +69,34 @@ export const TopNav: React.FC<TopNavProps> = ({
         {/* Kubernetes Connection Status */}
         <div
           className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium border ${
-            isConnected
+            clusterStatus?.cluster_status === 'connected'
               ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30'
+              : clusterStatus?.cluster_status === 'degraded'
+              ? 'bg-amber-500/10 text-amber-400 border-amber-500/30'
+              : clusterStatus?.cluster_status === 'connecting' || (isRefreshing && !clusterStatus)
+              ? 'bg-cyan-500/10 text-cyan-400 border-cyan-500/30'
               : 'bg-red-500/10 text-red-400 border-red-500/30'
           }`}
         >
-          {isConnected ? (
+          {clusterStatus?.cluster_status === 'connected' ? (
             <>
               <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400" />
-              <span>Cluster Connected ({clusterStatus?.server_version || 'live'})</span>
+              <span>ONLINE • {clusterStatus.cluster_name} ({clusterStatus?.server_version || 'live'})</span>
+            </>
+          ) : clusterStatus?.cluster_status === 'degraded' ? (
+            <>
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-400" />
+              <span>DEGRADED • {clusterStatus.cluster_name}</span>
+            </>
+          ) : clusterStatus?.cluster_status === 'connecting' || (isRefreshing && !clusterStatus) ? (
+            <>
+              <RefreshCw className="w-3.5 h-3.5 text-cyan-400 animate-spin" />
+              <span>CONNECTING...</span>
             </>
           ) : (
             <>
               <XCircle className="w-3.5 h-3.5 text-red-400" />
-              <span>Cluster Disconnected</span>
+              <span>OFFLINE • Disconnected</span>
             </>
           )}
         </div>

@@ -3,6 +3,7 @@ import { Sidebar } from './components/Sidebar';
 import { TopNav } from './components/TopNav';
 import { OverviewPage } from './pages/OverviewPage';
 import { WorkloadsPage } from './pages/WorkloadsPage';
+import { DeployAppPage } from './pages/DeployAppPage';
 import { PodsPage } from './pages/PodsPage';
 import { ServicesPage } from './pages/ServicesPage';
 import { HealthChecksPage } from './pages/HealthChecksPage';
@@ -42,33 +43,61 @@ export const App: React.FC = () => {
   const fetchData = useCallback(async () => {
     setIsRefreshing(true);
     try {
-      const [statusData, nsData, depData, podData, svcData, evtData, metricData] =
-        await Promise.all([
-          api.getClusterStatus().catch(() => null),
-          api.getNamespaces().catch(() => []),
-          api.getDeployments(selectedNamespace).catch(() => []),
-          api.getPods(selectedNamespace).catch(() => []),
-          api.getServices(selectedNamespace).catch(() => []),
-          api.getEvents(selectedNamespace).catch(() => []),
-          api.getMetrics(selectedNamespace).catch(() => null),
-        ]);
-
-      if (statusData) setClusterStatus(statusData);
-      if (nsData) setNamespaces(nsData);
-      if (depData) setDeployments(depData);
-      if (podData) setPods(podData);
-      if (svcData) setServices(svcData);
-      if (evtData) setEvents(evtData);
-      if (metricData) setMetrics(metricData);
-      setLastUpdated(new Date());
-
-      // Fetch real rollout if target deployment exists
-      const targetName = statusData?.target_deployment || 'kubepulse-sample';
-      if (targetName && statusData?.is_connected) {
-        api.getRolloutStatus(targetName, selectedNamespace)
-          .then(setRolloutStatus)
-          .catch(() => {});
+      let statusData: ClusterStatus | null = null;
+      try {
+        statusData = await api.getClusterStatus();
+      } catch (err: any) {
+        statusData = {
+          is_connected: false,
+          cluster_status: 'disconnected',
+          cluster_name: 'none',
+          auth_type: 'none',
+          current_context: undefined,
+          node_count: 0,
+          active_namespace: selectedNamespace,
+          target_deployment: 'kubepulse-sample',
+          reachable: false,
+          error_details: err?.message || 'Cannot reach KubePulse API Gateway at /api/cluster/status (Port 8001). Check if backend is running.',
+          message: 'Backend API Gateway or Kubernetes cluster is unreachable.',
+          available_contexts: [],
+        };
       }
+
+      setClusterStatus(statusData);
+
+      if (statusData && statusData.is_connected) {
+        const [nsData, depData, podData, svcData, evtData, metricData] =
+          await Promise.all([
+            api.getNamespaces().catch(() => []),
+            api.getDeployments(selectedNamespace).catch(() => []),
+            api.getPods(selectedNamespace).catch(() => []),
+            api.getServices(selectedNamespace).catch(() => []),
+            api.getEvents(selectedNamespace).catch(() => []),
+            api.getMetrics(selectedNamespace).catch(() => null),
+          ]);
+
+        if (nsData) setNamespaces(nsData);
+        if (depData) setDeployments(depData);
+        if (podData) setPods(podData);
+        if (svcData) setServices(svcData);
+        if (evtData) setEvents(evtData);
+        if (metricData) setMetrics(metricData);
+
+        // Fetch real rollout if target deployment exists
+        const targetName = statusData?.target_deployment || 'kubepulse-sample';
+        if (targetName) {
+          api.getRolloutStatus(targetName, selectedNamespace)
+            .then(setRolloutStatus)
+            .catch(() => {});
+        }
+      } else {
+        setDeployments([]);
+        setPods([]);
+        setServices([]);
+        setEvents([]);
+        setRolloutStatus(null);
+      }
+      setLastUpdated(new Date());
     } catch (err) {
       console.error('Error fetching cluster data:', err);
     } finally {
@@ -153,6 +182,18 @@ export const App: React.FC = () => {
                 onRefresh={fetchData}
                 isRefreshing={isRefreshing}
                 isConnected={isConnected}
+                onNavigate={setCurrentTab}
+              />
+            )}
+
+            {currentTab === 'deploy' && (
+              <DeployAppPage
+                clusterStatus={clusterStatus}
+                selectedNamespace={selectedNamespace}
+                deployments={deployments}
+                onRefresh={fetchData}
+                onScale={handleScaleDeployment}
+                onNavigate={setCurrentTab}
               />
             )}
 

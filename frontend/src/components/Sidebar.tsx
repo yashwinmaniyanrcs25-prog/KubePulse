@@ -2,6 +2,7 @@ import React from 'react';
 import {
   LayoutDashboard,
   Boxes,
+  Rocket,
   Layers,
   Network,
   Activity,
@@ -27,6 +28,7 @@ export const Sidebar: React.FC<SidebarProps> = ({
   const navItems: { id: NavTab; label: string; icon: React.ComponentType<{ className?: string }>; badge?: string }[] = [
     { id: 'overview', label: 'Overview', icon: LayoutDashboard },
     { id: 'workloads', label: 'Workloads', icon: Boxes },
+    { id: 'deploy', label: 'Deploy & Monitor', icon: Rocket, badge: 'New' },
     { id: 'pods', label: 'Pods & Recovery', icon: Layers },
     { id: 'services', label: 'Services', icon: Network },
     { id: 'health', label: 'Health Checks', icon: Activity },
@@ -58,21 +60,47 @@ export const Sidebar: React.FC<SidebarProps> = ({
       <div className="px-4 py-3 border-b border-navy-800">
         <div className="bg-navy-950/80 rounded-lg p-2.5 border border-navy-800 flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <span className={`h-2.5 w-2.5 rounded-full ${isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-red-400'}`} />
+            <span
+              className={`h-2.5 w-2.5 rounded-full ${
+                clusterStatus?.cluster_status === 'connected'
+                  ? 'bg-emerald-400 animate-pulse'
+                  : clusterStatus?.cluster_status === 'degraded'
+                  ? 'bg-amber-400'
+                  : clusterStatus?.cluster_status === 'connecting'
+                  ? 'bg-cyan-400 animate-ping'
+                  : 'bg-red-400'
+              }`}
+            />
             <div className="text-left">
               <p className="text-[11px] font-medium text-slate-300 truncate max-w-[120px]">
-                {isConnected ? clusterStatus?.cluster_name : 'Cluster Offline'}
+                {clusterStatus?.cluster_status === 'connected'
+                  ? clusterStatus.cluster_name
+                  : clusterStatus?.cluster_status === 'degraded'
+                  ? `${clusterStatus.cluster_name} (Degraded)`
+                  : clusterStatus?.cluster_status === 'connecting'
+                  ? 'Connecting...'
+                  : 'Cluster Offline'}
               </p>
               <p className="text-[10px] text-slate-400">
-                {isConnected ? `${clusterStatus?.auth_type}` : 'Disconnected'}
+                {clusterStatus?.cluster_status === 'connected'
+                  ? `ONLINE (${clusterStatus?.auth_type})`
+                  : clusterStatus?.cluster_status === 'degraded'
+                  ? 'DEGRADED'
+                  : clusterStatus?.cluster_status === 'connecting'
+                  ? 'CONNECTING'
+                  : 'OFFLINE'}
               </p>
             </div>
           </div>
-          <span className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
-            isConnected
-              ? 'text-emerald-400 bg-emerald-950/80 border-emerald-800/60'
-              : 'text-red-400 bg-red-950/80 border-red-800/60'
-          }`}>
+          <span
+            className={`text-[10px] font-mono px-1.5 py-0.5 rounded border ${
+              clusterStatus?.cluster_status === 'connected'
+                ? 'text-emerald-400 bg-emerald-950/80 border-emerald-800/60'
+                : clusterStatus?.cluster_status === 'degraded'
+                ? 'text-amber-400 bg-amber-950/80 border-amber-800/60'
+                : 'text-red-400 bg-red-950/80 border-red-800/60'
+            }`}
+          >
             {clusterStatus?.active_namespace || 'kubepulse'}
           </span>
         </div>

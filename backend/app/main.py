@@ -3,7 +3,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.config import settings
-from app.routers import cluster, deployments, pods, services, events, metrics, demo
+from app.routers import cluster, deployments, pods, services, events, metrics, demo, deploy_input, monitors
 from app.services.k8s_client import k8s_service
 
 logging.basicConfig(
@@ -40,6 +40,8 @@ app.add_middleware(
 # Include Routers
 app.include_router(cluster.router)
 app.include_router(deployments.router)
+app.include_router(deploy_input.router)
+app.include_router(monitors.router)
 app.include_router(pods.router)
 app.include_router(services.router)
 app.include_router(events.router)
@@ -58,6 +60,8 @@ async def root():
             "/api/cluster/status",
             "/api/namespaces",
             "/api/deployments",
+            "/api/deployments/deploy-input",
+            "/api/monitors",
             "/api/pods",
             "/api/services",
             "/api/events",

@@ -38,7 +38,7 @@ def validate_dns_name(name: str) -> str:
     if not name or not isinstance(name, str):
         raise ValueError("Application name must be a non-empty string.")
     
-    clean_name = name.strip().lower()
+    clean_name = name.strip()
     if len(clean_name) > 63:
         raise ValueError(f"Application name '{clean_name}' exceeds maximum length of 63 characters.")
     

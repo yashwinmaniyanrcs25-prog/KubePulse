@@ -15,6 +15,7 @@ import {
   Terminal,
   HelpCircle,
   RefreshCw,
+  Rocket,
 } from 'lucide-react';
 import {
   AreaChart,
@@ -132,6 +133,13 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
                 </button>
               )}
               <button
+                onClick={() => onNavigate('deploy')}
+                className="px-3 py-1.5 rounded-lg bg-emerald-500/10 hover:bg-emerald-500/20 border border-emerald-500/30 text-emerald-300 font-medium flex items-center gap-1.5 transition-colors"
+              >
+                <Rocket className="w-3.5 h-3.5 text-emerald-400" />
+                <span>Deploy & Monitor</span>
+              </button>
+              <button
                 onClick={() => onNavigate('guide')}
                 className="px-3 py-1.5 rounded-lg bg-cyan-500/10 hover:bg-cyan-500/20 border border-cyan-500/30 text-cyan-300 font-medium flex items-center gap-1 transition-colors"
               >
@@ -166,6 +174,13 @@ export const OverviewPage: React.FC<OverviewPageProps> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            <button
+              onClick={() => onNavigate('deploy')}
+              className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-emerald-500/20 hover:bg-emerald-500/30 border border-emerald-500/40 text-emerald-300 transition-all flex items-center gap-1.5 shadow-sm"
+            >
+              <Rocket className="w-3.5 h-3.5" />
+              <span>Deploy App / Monitor</span>
+            </button>
             <button
               onClick={() => onNavigate('demo')}
               className="px-3 py-1.5 rounded-lg text-xs font-semibold bg-gradient-to-r from-emerald-500 to-cyan-500 hover:from-emerald-400 hover:to-cyan-400 text-navy-950 shadow-md shadow-emerald-500/20 transition-all flex items-center gap-1.5"
